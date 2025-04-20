@@ -1,96 +1,54 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YAMA Bot - Pairing Code</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            padding: 20px;
-        }
-        input, button {
-            padding: 10px;
-            margin: 10px;
-            font-size: 16px;
-        }
-        .code-container {
-            display: none;
-        }
-        .info-section {
-            margin-top: 30px;
-            background-color: #f0f0f0;
-            padding: 20px;
-            border-radius: 8px;
-        }
-        .info-section h3 {
-            font-size: 24px;
-        }
-        .info-section p {
-            font-size: 16px;
-            color: #333;
-        }
-        .info-section button {
-            background-color: #25d366;
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            font-size: 18px;
-            cursor: pointer;
-            border-radius: 5px;
-            margin-top: 15px;
-        }
-        .info-section button:hover {
-            background-color: #128c7e;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Connexion Bot WhatsApp</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 40px;
+      background: #f4f4f4;
+    }
+    input, button {
+      padding: 10px;
+      font-size: 1em;
+      margin: 10px 0;
+    }
+    #code {
+      font-size: 1.5em;
+      color: green;
+      margin-top: 20px;
+    }
+  </style>
 </head>
 <body>
-    <h1>YAMA Bot - Pairing Code</h1>
-    <p>Entrez votre numéro WhatsApp pour générer un code de connexion</p>
-    <input type="text" id="phoneNumber" placeholder="Numéro WhatsApp" />
-    <button onclick="generateCode()">Générer le code</button>
+  <h1>Connexion à votre Bot WhatsApp</h1>
+  <p>Entrez votre numéro WhatsApp ci-dessous :</p>
+  <input type="text" id="phone" placeholder="Ex: 22960000000" />
+  <br>
+  <button onclick="generateCode()">Générer le code</button>
+  <div id="code"></div>
 
-    <div class="code-container">
-        <h2>Code de Connexion : <span id="pairingCode"></span></h2>
-        <p>Connectez-vous à WhatsApp avec ce code dans "Appareils connectés"</p>
-        <button onclick="downloadSession()">Télécharger la session</button>
-    </div>
-
-    <div class="info-section">
-        <h3>À propos de YAMA</h3>
-        <p><strong>Nom du créateur :</strong> EMPEROR SUKUNA</p>
-        <p>YAMA est un bot avancé qui vous aide à gérer votre expérience WhatsApp de manière plus fluide et puissante. Il vous permet de vous connecter automatiquement et d'effectuer diverses actions facilement.</p>
-        <p><strong>Rejoignez le canal officiel :</strong></p>
-        <button onclick="window.open('https://whatsapp.com/channel/0029Vb6J7O684Om8DdNfvL2N')">Rejoindre le Canal WhatsApp</button>
-    </div>
-
-    <script>
-        function generateCode() {
-            const phoneNumber = document.getElementById("phoneNumber").value;
-            if (phoneNumber) {
-                fetch(`/generate-code?phone=${phoneNumber}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        document.getElementById("pairingCode").textContent = data.code;
-                        document.querySelector(".code-container").style.display = "block";
-                    });
-            } else {
-                alert("Veuillez entrer un numéro.");
-            }
-        }
-
-        function downloadSession() {
-            fetch(`/download-session`)
-                .then(response => response.blob())
-                .then(blob => {
-                    const link = document.createElement("a");
-                    link.href = URL.createObjectURL(blob);
-                    link.download = "session.zip";
-                    link.click();
-                });
-        }
-    </script>
+  <script>
+    async function generateCode() {
+      const phone = document.getElementById('phone').value
+      if (!phone) return alert("Veuillez entrer un numéro.")
+      const res = await fetch('/pair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone })
+      })
+      const data = await res.json()
+      if (data.success) {
+        document.getElementById('code').innerHTML = `
+          <p>Copiez ce code dans WhatsApp → Appareils connectés :</p>
+          <strong>${data.pairingCode}</strong>
+        `
+      } else {
+        document.getElementById('code').innerText = data.message
+      }
+    }
+  </script>
 </body>
 </html>
