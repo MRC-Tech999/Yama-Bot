@@ -1,12 +1,12 @@
 const express = require('express')
 const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys')
-const { delay } = require('@whiskeysockets/baileys/lib/Utils')
 const crypto = require('crypto')
 
 const app = express()
-app.use(express.json())
+app.use(express.json())  // Pour accepter les données JSON
+app.use(express.static('public')) // Si vous avez des fichiers statiques à servir
 
-// Génère un ID de session
+// Fonction pour générer un ID de session unique
 function generateSessionId() {
   return `levanter_${crypto.randomBytes(16).toString('hex')}`
 }
@@ -16,6 +16,7 @@ app.post('/pair', async (req, res) => {
   if (!phone) return res.json({ success: false, message: 'Numéro manquant.' })
 
   try {
+    // Création de l'authentification via Baileys
     const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${phone}`)
     const sock = makeWASocket({
       auth: state,
@@ -23,19 +24,26 @@ app.post('/pair', async (req, res) => {
       browser: ['YAMA-BOT', 'Safari', '1.0.0'],
     })
 
-    sock.ev.on('connection.update', async ({ connection, pairingCode }) => {
+    sock.ev.on('connection.update', async ({ connection, pairingCode, lastDisconnect }) => {
       if (pairingCode) {
-        res.json({ success: true, pairingCode })
+        // Si le code de pairage est généré, renvoyer à l'utilisateur
+        return res.json({ success: true, pairingCode })
+      }
 
-        // Attente que la session soit connectée
-        sock.ev.once('creds.update', async () => {
-          const sessionId = generateSessionId()
-          sock.sendMessage(`${phone}@s.whatsapp.net`, {
-            text: `✅ *Connection successfully!*\n\n🔑 *Session ID* : ${sessionId}\n\n🔗 *Channel WhatsApp* : https://whatsapp.com/channel/0029Vb6J7O684Om8DdNfvL2N\n👤 *Créateur* : EMPEROR SUKUNA\n📞 *Contact* : +22960000000`
-          })
-        })
+      if (connection === 'close' || lastDisconnect?.error) {
+        return res.json({ success: false, message: 'Échec de la connexion avec WhatsApp' })
       }
     })
+    
+    sock.ev.once('creds.update', async () => {
+      const sessionId = generateSessionId()
+
+      // Vous pouvez envoyer un message de confirmation
+      sock.sendMessage(`${phone}@s.whatsapp.net`, {
+        text: `✅ *Connection successfully!*\n\n🔑 *Session ID* : ${sessionId}\n\n🔗 *Channel WhatsApp* : https://whatsapp.com/channel/0029Vb6J7O684Om8DdNfvL2N\n👤 *Créateur* : EMPEROR SUKUNA\n📞 *Contact* : +22960000000`
+      })
+    })
+    
   } catch (e) {
     console.log(e)
     res.json({ success: false, message: 'Erreur lors de la génération du code.' })
