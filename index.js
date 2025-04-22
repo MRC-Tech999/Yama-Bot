@@ -1,54 +1,64 @@
-const { Client } = require('baileys');
+const { default: makeWASocket, useMultiFileAuthState, generateWAMessageFromContent, jidNormalizedUser } = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
+const { delay } = require('@whiskeysockets/baileys');
 const fs = require('fs');
-const readline = require('readline');
-const client = new Client();
-const commande = require('./commande'); // Importer le fichier des commandes
+const path = require('path');
+const P = require('pino');
 
-// Créer un objet readline pour lire les entrées depuis la console
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-});
+const startBot = async () => {
+  const { state, saveCreds } = await useMultiFileAuthState('YAMA_SESSION');
+  const sock = makeWASocket({
+    printQRInTerminal: true,
+    auth: state,
+    logger: P({ level: 'silent' }),
+    browser: ['YAMA-BOT', 'Chrome', '1.0.0']
+  });
 
-// Demander le numéro de téléphone pour générer un code de pairage
-rl.question('Entrez votre numéro de téléphone (avec l\'indicatif régional, sans le +): ', (phoneNumber) => {
-    console.log('Génération du code de pairage pour : ' + phoneNumber);
-    
-    // Générer un code de pairage aléatoire de 8 caractères (lettres et chiffres)
-    const pairingCode = Math.random().toString(36).substr(2, 8).toUpperCase();
-    console.log(`Code de pairage généré : ${pairingCode}`);
-    
-    // Envoi du code de pairage à l'utilisateur
-    client.sendMessage(`${phoneNumber}@s.whatsapp.net`, `Votre code de pairage est : ${pairingCode}`);
-    
-    // Fermer l'interface readline
-    rl.close();
-});
+  sock.ev.on('creds.update', saveCreds);
 
-// Lorsque la connexion est établie avec WhatsApp
-client.on('open', () => {
-    console.log('YAMA est prêt et connecté!');
-    // Lien du canal WhatsApp
-    const channelLink = 'https://whatsapp.com/channel/0029Vb6J7O684Om8DdNfvL2N';
-    console.log(`Rejoignez le canal WhatsApp YAMA ici: ${channelLink}`);
-});
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect, qr } = update;
 
-// En cas de problème d'authentification
-client.on('auth_failure', (err) => {
-    console.log('Échec de l\'authentification', err);
-});
+    if (qr) {
+      console.log('\n[SCAN] QR Code détecté. Scanne-le dans WhatsApp > Appareils connectés > Lier un appareil.\n');
+    }
 
-// Une fois que le bot est prêt et que la session est authentifiée
-client.on('ready', () => {
-    console.log('YAMA est connecté avec succès!');
-    // Si le code de pairage est validé par l'utilisateur, on peut envoyer un message de confirmation
-    client.sendMessage('00000000000@s.whatsapp.net', 'Connection successfully! Finished syncing with WhatsApp on Safari or Chrome (YAMA-v1)');
-});
+    if (connection === 'close') {
+      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+      console.log('[CONNEXION FERMÉE]', lastDisconnect?.error, '\n=> Reconnexion :', shouldReconnect);
+      if (shouldReconnect) {
+        startBot();
+      }
+    } else if (connection === 'open') {
+      console.log('[YAMA] Connecté avec succès!');
+    }
+  });
 
-// Lorsque le bot reçoit un message, il vérifie les commandes
-client.on('message', async (message) => {
-    commande(message, client); // Appeler les commandes dans commande.js
-});
+  sock.ev.on('messages.upsert', async (m) => {
+    const msg = m.messages[0];
+    if (!msg.message || msg.key.fromMe) return;
 
-// Initialisation du client
-client.initialize();
+    const from = msg.key.remoteJid;
+    const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
+
+    // Charger dynamiquement les commandes
+    if (body.startsWith(".")) {
+      const command = body.split(" ")[0].substring(1);
+      const filePath = path.join(__dirname, "commands", `${command}.js`);
+
+      if (fs.existsSync(filePath)) {
+        const cmd = require(filePath);
+        try {
+          await cmd.execute(msg, sock);
+        } catch (e) {
+          console.error(`Erreur dans la commande .${command} :`, e);
+        }
+      } else {
+        await sock.sendMessage(from, { text: "Commande inconnue." });
+      }
+    }
+  });
+};
+
+startBot();
+        
