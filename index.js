@@ -1,8 +1,7 @@
-const { default: makeWASocket, useMultiFileAuthState, makeCacheableSignalKeyStore, fetchLatestBaileysVersion, generateWAMessageFromContent, proto, DisconnectReason } = require('@whiskeysockets/baileys')
-const { Boom } = require('@hapi/boom')
-const P = require('pino')
-const fs = require('fs')
-const path = require('path')
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
+const crypto = require('crypto').webcrypto;
+
 
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('session')
