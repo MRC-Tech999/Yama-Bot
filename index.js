@@ -1,64 +1,44 @@
-const { default: makeWASocket, useMultiFileAuthState, generateWAMessageFromContent, jidNormalizedUser } = require('@whiskeysockets/baileys');
-const { Boom } = require('@hapi/boom');
-const { delay } = require('@whiskeysockets/baileys');
-const fs = require('fs');
-const path = require('path');
-const P = require('pino');
+const { default: makeWASocket, useMultiFileAuthState, makeCacheableSignalKeyStore, fetchLatestBaileysVersion, generateWAMessageFromContent, proto, DisconnectReason } = require('@whiskeysockets/baileys')
+const { Boom } = require('@hapi/boom')
+const P = require('pino')
+const fs = require('fs')
+const path = require('path')
 
-const startBot = async () => {
-  const { state, saveCreds } = await useMultiFileAuthState('YAMA_SESSION');
+async function startBot() {
+  const { state, saveCreds } = await useMultiFileAuthState('session')
+  const { version, isLatest } = await fetchLatestBaileysVersion()
+
   const sock = makeWASocket({
-    printQRInTerminal: true,
-    auth: state,
+    version,
     logger: P({ level: 'silent' }),
-    browser: ['YAMA-BOT', 'Chrome', '1.0.0']
-  });
+    printQRInTerminal: false,
+    auth: {
+      creds: state.creds,
+      keys: makeCacheableSignalKeyStore(state.keys, P({ level: 'silent' })),
+    },
+    browser: ['YAMA-BOT', 'Safari', '1.0.0']
+  })
 
-  sock.ev.on('creds.update', saveCreds);
+  if (!sock.authState.creds.registered) {
+    const code = await sock.requestPairingCode("numéro@s.whatsapp.net") // Remplace "numéro" par ton numéro sans +
+    console.log(`Code d'appairage : ${code}`)
+  }
+
+  sock.ev.on('creds.update', saveCreds)
 
   sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect, qr } = update;
-
-    if (qr) {
-      console.log('\n[SCAN] QR Code détecté. Scanne-le dans WhatsApp > Appareils connectés > Lier un appareil.\n');
-    }
-
+    const { connection, lastDisconnect } = update
     if (connection === 'close') {
-      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      console.log('[CONNEXION FERMÉE]', lastDisconnect?.error, '\n=> Reconnexion :', shouldReconnect);
+      const shouldReconnect = (lastDisconnect.error = Boom)?.output?.statusCode !== DisconnectReason.loggedOut
+      console.log('Déconnecté...', lastDisconnect.error, 'Reconnexion :', shouldReconnect)
       if (shouldReconnect) {
-        startBot();
+        startBot()
       }
     } else if (connection === 'open') {
-      console.log('[YAMA] Connecté avec succès!');
+      console.log('YAMA est connecté avec succès !')
     }
-  });
+  })
+}
 
-  sock.ev.on('messages.upsert', async (m) => {
-    const msg = m.messages[0];
-    if (!msg.message || msg.key.fromMe) return;
-
-    const from = msg.key.remoteJid;
-    const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
-
-    // Charger dynamiquement les commandes
-    if (body.startsWith(".")) {
-      const command = body.split(" ")[0].substring(1);
-      const filePath = path.join(__dirname, "commands", `${command}.js`);
-
-      if (fs.existsSync(filePath)) {
-        const cmd = require(filePath);
-        try {
-          await cmd.execute(msg, sock);
-        } catch (e) {
-          console.error(`Erreur dans la commande .${command} :`, e);
-        }
-      } else {
-        await sock.sendMessage(from, { text: "Commande inconnue." });
-      }
-    }
-  });
-};
-
-startBot();
-        
+startBot()
+                                                           
