@@ -39,7 +39,6 @@ const startBot = async () => {
     if (connection === 'open') {
       console.log('Bot connecté avec succès');
 
-      // Envoie un message sur WhatsApp à toi-même ou à l'utilisateur
       const jid = sock.user.id;
       const message = {
         text: `✅ *Connection successfully!*\n\n🧠 Finished syncing with WhatsApp (YAMA-v1)\n\n🔗 Suis notre chaîne officielle :\nhttps://whatsapp.com/channel/0029Vb6J7O684Om8DdNfvL2N\n\n👑 Créateur : EMPEROR SUKUNA`
@@ -48,7 +47,7 @@ const startBot = async () => {
     }
 
     if (connection === 'close') {
-      const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+      const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
       console.log('Déconnecté...', lastDisconnect?.error);
       if (shouldReconnect) {
         startBot();
@@ -60,4 +59,4 @@ const startBot = async () => {
 };
 
 startBot();
-      
+    
