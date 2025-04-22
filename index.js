@@ -1,43 +1,56 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, generatePairingCode, delay, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
+const P = require('pino');
+const fs = require('fs');
 const crypto = require('crypto').webcrypto;
 
-
 async function startBot() {
-  const { state, saveCreds } = await useMultiFileAuthState('session')
-  const { version, isLatest } = await fetchLatestBaileysVersion()
+    const { state, saveCreds } = await useMultiFileAuthState('auth_yama');
+    const { version } = await fetchLatestBaileysVersion();
 
-  const sock = makeWASocket({
-    version,
-    logger: P({ level: 'silent' }),
-    printQRInTerminal: false,
-    auth: {
-      creds: state.creds,
-      keys: makeCacheableSignalKeyStore(state.keys, P({ level: 'silent' })),
-    },
-    browser: ['YAMA-BOT', 'Safari', '1.0.0']
-  })
+    const sock = makeWASocket({
+        version,
+        printQRInTerminal: false,
+        auth: {
+            creds: state.creds,
+            keys: makeCacheableSignalKeyStore(state.keys, P().info)
+        },
+        logger: P({ level: 'silent' }),
+        browser: ['YAMA-Bot', 'Safari', '1.0.0'],
+    });
 
-  if (!sock.authState.creds.registered) {
-    const code = await sock.requestPairingCode("numéro@s.whatsapp.net") // Remplace "numéro" par ton numéro sans +
-    console.log(`Code d'appairage : ${code}`)
-  }
-
-  sock.ev.on('creds.update', saveCreds)
-
-  sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect } = update
-    if (connection === 'close') {
-      const shouldReconnect = (lastDisconnect.error = Boom)?.output?.statusCode !== DisconnectReason.loggedOut
-      console.log('Déconnecté...', lastDisconnect.error, 'Reconnexion :', shouldReconnect)
-      if (shouldReconnect) {
-        startBot()
-      }
-    } else if (connection === 'open') {
-      console.log('YAMA est connecté avec succès !')
+    if (!sock.authState.creds.registered) {
+        const number = process.env.NUMBER || 'PUT_PHONE_NUMBER_HERE';
+        const code = await generatePairingCode(number, sock);
+        console.log(`PAIR CODE for ${number} : ${code}`);
+        console.log("Copiez ce code dans WhatsApp > Appareils connectés > Utiliser un code");
     }
-  })
+
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect } = update;
+        if (connection === 'open') {
+            console.log('✅ Connection successfully!');
+
+            const sessionId = 'YAMA_' + crypto.randomUUID().replace(/-/g, '');
+            console.log('SESSION ID : ' + sessionId);
+
+            const jid = Object.keys(sock.authState.creds.myJid)[0];
+            await sock.sendMessage(jid, {
+                text: `✅ Bot YAMA connecté avec succès !\n\nSession ID : *${sessionId}*\n\nSuivez-nous ici : https://whatsapp.com/channel/0029Vb6J7O684Om8DdNfvL2N\n\nCréateur : *EMPEROR SUKUNA*`
+            });
+        }
+
+        if (connection === 'close') {
+            const shouldReconnect = (lastDisconnect.error = new Boom(lastDisconnect?.error))?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('❌ Déconnecté...', lastDisconnect.error, 'Reconnexion ?', shouldReconnect);
+            if (shouldReconnect) {
+                startBot();
+            }
+        }
+    });
+
+    sock.ev.on('creds.update', saveCreds);
 }
 
-startBot()
-                                                           
+startBot();
+      
