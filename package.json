@@ -1,0 +1,23 @@
+{
+  "name": "yama-bot",
+  "version": "1.0.0",
+  "description": "Bot WhatsApp YAMA créé par EMPEROR SUKUNA",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "baileys",
+    "yama"
+  ],
+  "author": "EMPEROR SUKUNA",
+  "license": "MIT",
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "^6.6.0",
+    "chalk": "^5.3.0",
+    "pino": "^8.0.0"
+  }
+}
