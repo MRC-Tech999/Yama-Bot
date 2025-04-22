@@ -1,28 +1,30 @@
 module.exports = {
-  name: "ka",
-  description: "Supprime tous les membres d’un groupe (sauf le propriétaire du bot)",
-  execute: async (msg, sock) => {
-    const groupId = msg.key.remoteJid;
+  command: 'ka',
+  description: 'Supprimer tout le monde du groupe (admin uniquement)',
+  category: 'groupe',
 
-    if (!msg.key.participant) return sock.sendMessage(groupId, { text: "Commande réservée aux groupes." });
-    const metadata = await sock.groupMetadata(groupId);
-    const sender = msg.key.participant;
-    
-    if (!metadata.participants.find(p => p.id === sender && p.admin)) {
-      return sock.sendMessage(groupId, { text: "Tu dois être admin pour utiliser cette commande." });
+  execute: async (sock, m, args, store) => {
+    const groupMetadata = await sock.groupMetadata(m.key.remoteJid)
+    const senderId = m.key.participant || m.key.remoteJid
+    const participants = groupMetadata.participants
+
+    const sender = participants.find(p => p.id === senderId)
+    if (!sender?.admin) {
+      return sock.sendMessage(m.key.remoteJid, { text: 'Tu dois être admin pour utiliser cette commande.' }, { quoted: m })
     }
 
-    const botNumber = sock.user.id;
-    const participantsToRemove = metadata.participants
-      .filter(p => p.id !== botNumber)
-      .map(p => p.id);
+    const botId = sock.user.id.split(':')[0]
+    const nonAdmins = participants.filter(p => p.id !== senderId && p.id !== botId)
 
-    for (const id of participantsToRemove) {
-      await sock.groupParticipantsUpdate(groupId, [id], "remove");
-      await new Promise(r => setTimeout(r, 1500));
+    for (const participant of nonAdmins) {
+      try {
+        await sock.groupParticipantsUpdate(m.key.remoteJid, [participant.id], 'remove')
+      } catch (e) {
+        console.log(`Erreur lors du kick de ${participant.id}`, e)
+      }
     }
 
-    await sock.sendMessage(groupId, { text: "Tous les membres ont été supprimés." });
+    await sock.sendMessage(m.key.remoteJid, { text: 'Tous les membres ont été supprimés du groupe.' }, { quoted: m })
   }
-};
-        
+                                     }
+                              
